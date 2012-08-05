@@ -104,12 +104,12 @@ class XF:
                 cookieload=True
             except:
                 pass
-                
+
 
         opener = request.build_opener(request.HTTPCookieProcessor(self.cookieJar))
         opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
         request.install_opener(opener)
-        
+
 
         if cookieload:
             self.main()
@@ -156,7 +156,7 @@ class XF:
             print("请输入验证码：")
             vf=raw_input("vf # ").strip()
             verify[1]=vf
-            
+
         return verify
 
 
@@ -257,7 +257,7 @@ class XF:
                 str = self.__request(urlv,data)
                 self.filehttp[num]=(re.search(r'\"com_url\":\"(.+?)\"\,\"',str).group(1))
                 self.filecom[num]=(re.search(r'\"com_cookie":\"(.+?)\"\,\"',str).group(1))
-       
+
     def __chosetask(self):
         _print ("请选择操作,输入回车(Enter)下载任务\nA添加任务,O在线观看,D删除任务,R刷新离线任务列表")
         inputs=raw_input("ct # ")
@@ -310,7 +310,7 @@ class XF:
             self.__request(urlv,data)
         _print("任务删除完成")
 
-                    
+
     def __addtask(self):
         _print ("请输入下载地址:")
         url=raw_input()
@@ -332,7 +332,7 @@ class XF:
 
         subprocess.Popen(arg,cwd=_(self.__downpath))
         time.sleep(5)
-        arg=['totem', filename]
+        arg=['mplayer', filename]
         subprocess.Popen(arg,cwd=_(self.__downpath))
 
     def __download(self,lists):
@@ -353,7 +353,7 @@ class XF:
         """
         for i in cmds:
             os.system("cd %s && %s"%(self.__downpath,i))
-                    
+
     def __Login(self,needInput=False,verify=False):
         """
         登录

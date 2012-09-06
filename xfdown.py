@@ -10,13 +10,11 @@ try:
 except:
     from urllib import parse,request
     from http import cookiejar
+    raw_input=input
 import random,time
 import json,os,sys,re,hashlib
+import getopt
 
-try:
-    raw_input
-except:
-    raw_input=input
 def _(string):
     try:
         return string.decode("u8")
@@ -25,21 +23,20 @@ def _(string):
 
 def _print(str):
     print (_(str))
+
 def get_module_path():
-        if hasattr(sys, "frozen"):
-            module_path = os.path.dirname(sys.executable)
-        else:
-            module_path = os.path.dirname(os.path.abspath(__file__))
-        return module_path
+    if hasattr(sys, "frozen"):
+        module_path = os.path.dirname(sys.executable)
+    else:
+        module_path = os.path.dirname(os.path.abspath(__file__))
+    return module_path
 module_path=get_module_path()
 
-def hexchar2bin(str):
-        arr = []
-        for i in range(0, len(str) , 2):
-            arr.append("\\x" + str[i:i+2])
-        arr="".join(arr)
-        exec("temp = '" + arr + "'");
-        return temp
+def hexchar2bin(hex):
+    arry= bytearray()
+    for i in range(0, len(hex), 2):
+        arry.append(int(hex[i:i+2],16))
+    return arry
 
 
 class LWPCookieJar(cookiejar.LWPCookieJar):
@@ -48,7 +45,10 @@ class LWPCookieJar(cookiejar.LWPCookieJar):
             if self.filename is not None: filename = self.filename
             else: raise ValueError(MISSING_FILENAME_TEXT)
 
-        f = open(filename, "a+")
+        if not os.path.exists(filename):
+          f=open(filename,'w')
+          f.close()
+        f = open(filename, "w+")
         try:
             if userinfo:
                 f.seek(0)
@@ -56,6 +56,7 @@ class LWPCookieJar(cookiejar.LWPCookieJar):
                 f.write("#%s\n"%userinfo)
             else:
                 f.seek(len(''.join(f.readlines()[:2])))
+            f.truncate()
             f.write(self.as_lwp_str(ignore_discard, ignore_expires))
         finally:
             f.close()
@@ -67,11 +68,7 @@ class XF:
      Login QQ
     """
 
-    __downpath = os.path.expanduser("~/下载")
-    try:
-        os.makedirs(__downpath)
-    except:
-        pass
+    _player="mplayer"
 
     __cookiepath = '%s/cookie'%module_path
     __verifyimg  = '%s/verify.jpg'%module_path
@@ -82,18 +79,23 @@ class XF:
             self.hashpasswd=self.__md5(password)
 
         I=hexchar2bin(self.hashpasswd)
-
-        H = self.__md5(I + verifycode[2])
-        G = self.__md5(H + verifycode[1].upper());
+        if sys.version_info >= (3,0):
+          H = self.__md5(I + bytes(verifycode[2],encoding="ISO-8859-1"))
+        else:
+          H = self.__md5(I + verifycode[2])
+        G = self.__md5(H + verifycode[1].upper())
 
         return G
 
+    def __md5(self,item):
+        if sys.version_info >= (3,0):
+            try:
+              item=item.encode("u8")
+            except:
+              pass
+        return hashlib.md5(item).hexdigest().upper()
 
-    def __md5(self,str):
-        return hashlib.md5(str).hexdigest().upper()
-
-
-    def __init__(self):
+    def start(self):
         self.cookieJar=LWPCookieJar(self.__cookiepath)
 
         cookieload=False
@@ -140,7 +142,7 @@ class XF:
 
         urlv = 'http://check.ptlogin2.qq.com/check?uin=%s&appid=567008010&r=%s'%(self.__qq,random.Random().random())
 
-        str = self.__request(url = urlv, savecookie=False)
+        str = self.__request(url = urlv)
         verify=eval(str.split("(")[1].split(")")[0])
         verify=list(verify)
         if verify[0]=='1':
@@ -163,7 +165,7 @@ class XF:
     def __request_login(self):
 
         urlv="http://ptlogin2.qq.com/login?u=%s&p=%s&verifycode=%s"%(self.__qq,self.passwd,self.__verifycode[1])+"&aid=567008010&u1=http%3A%2F%2Flixian.qq.com%2Fmain.html&h=1&ptredirect=1&ptlang=2052&from_ui=1&dumy=&fp=loginerroralert&action=2-10-&mibao_css=&t=1&g=1"
-        str = self.__request(url = urlv,savecookie=True)
+        str = self.__request(url = urlv)
         if str.find(_('登录成功')) != -1:
             self.__getlogin()
             self.main()
@@ -202,7 +204,7 @@ class XF:
             得到任务名与hash值
             """
             urlv = 'http://lixian.qq.com/handler/lixian/get_lixian_list.php'
-            res = self.__request(urlv,{},savecookie=False)
+            res = self.__request(urlv,{})
             res = json.JSONDecoder().decode(res)
             if res["msg"]==_('未登录!'):
                 res=json.JSONDecoder().decode(self.__getlogin())
@@ -219,6 +221,7 @@ class XF:
                 self.filename = []
                 self.filehash = []
                 self.filemid = []
+                res['data'].sort(key=lambda x: x["file_name"])
                 _print ("\n===================离线任务列表====================")
                 _print ("序号\t大小\t进度\t文件名")
                 for num in range(len(res['data'])):
@@ -229,7 +232,6 @@ class XF:
                     self.filemid.append(index['mid'])
                     if size==0:
                         percent="-0"
-
                     else:
                         percent=str(index['comp_size']/size*100).split(".")[0]
 
@@ -241,7 +243,11 @@ class XF:
                         else:
                             break
                     size="%.1f%s"%(size,_dw)
-                    _print ("%d\t%s\t%s%%\t%s"%(num+1,size,percent,_(self.filename[num])))
+                    out="%d\t%s\t%s%%\t%s"%(num+1,size,percent,_(self.filename[num]))
+                    if num % 2==0 and os.name=='posix':
+                        out="\033[47m%s\033[m"%out
+
+                    _print (out)
                 _print ("=======================END=========================\n")
 
     def __gethttp(self,filelist):
@@ -260,7 +266,7 @@ class XF:
 
     def __chosetask(self):
         _print ("请选择操作,输入回车(Enter)下载任务\nA添加任务,O在线观看,D删除任务,R刷新离线任务列表")
-        inputs=raw_input("ct # ")
+        inputs=raw_input("st # ")
         if inputs.upper()=="A":
             self.__addtask()
             self.main()
@@ -277,11 +283,17 @@ class XF:
             self.main()
 
     def __getdownload(self):
-            _print ("请输入要下载的任务序号,数字之间用空格或其他字符分隔.\n输入A下载所有任务:")
+            _print ("请输入要下载的任务序号,数字之间用空格或其他字符分隔.或者使用-来选择连续任务\n输入A下载所有任务:")
             _print ("(数字后跟p只打印下载命令而不下载，比如1p2p3)")
             target=raw_input("dl # ").strip()
             if target.upper()=="A":
                 lists=zip(range(1,len(self.filehash)+1) , ['']* len(self.filehash))
+            elif '-' in target:
+                nums = []
+                for i in target.split(' '):
+                    ran = i.split('-')
+                    nums.extend(range(int(ran[0]),int(ran[1])+1))
+                lists = zip(nums , [''] * len(nums))
             else:
                 lists=self.__RE.findall(target)
             if lists==[]:
@@ -297,6 +309,12 @@ class XF:
         target=raw_input("dt # ").strip()
         if target.upper()=="A":
             lists=zip(range(1,len(self.filehash)+1) , ['']* len(self.filehash))
+        elif '-' in target:
+            nums = []
+            for i in target.split():
+                ran = target.split('-')
+                nums.extend(range(int(ran[0]),int(ran[1])+1))
+            lists = zip(nums , [''] * len(nums))
         else:
             lists=self.__RE.findall(target)
         if lists==[]:
@@ -328,12 +346,16 @@ class XF:
         self.__gethttp([(num+1,'')])
         _print("正在缓冲，马上开始播放")
         filename=_(self.filename[num])
-        arg=['wget', '-c', '-O', filename, '--header', 'Cookie:FTN5K=%s'%self.filecom[num], self.filehttp[num]]
+        cmd=['wget', '-c', '-O', filename, '--header', 'Cookie:FTN5K=%s'%self.filecom[num], self.filehttp[num]]
 
-        subprocess.Popen(arg,cwd=_(self.__downpath))
+        subprocess.Popen(cmd,cwd=_(self._downpath))
         time.sleep(5)
-        arg=['mplayer', filename]
-        subprocess.Popen(arg,cwd=_(self.__downpath))
+        cmd=[self._player, filename]
+        try:
+          subprocess.Popen(cmd,cwd=_(self._downpath))
+        except:
+          _print("%s 没有安装"%self._player)
+
 
     def __download(self,lists):
         cmds=[]
@@ -341,7 +363,11 @@ class XF:
         for i in lists:
             num=int(i[0])-1
             cmd="aria2c -c -s10 -x10 --header 'Cookie:ptisp=edu; FTN5K=%s' '%s'"%(self.filecom[num],self.filehttp[num])
-            cmd=cmd.encode("u8")
+            if sys.version_info >= (3,0):
+                pass
+            else:
+                cmd=cmd.encode("u8")
+
             if i[1].upper()=='P':
                 print('\n%s'%cmd)
             else:
@@ -352,13 +378,18 @@ class XF:
 
         """
         for i in cmds:
-            os.system("cd %s && %s"%(self.__downpath,i))
+            os.system("cd %s && %s"%(self._downpath,i))
+            try:
+                subprocess.Popen(["notify-send","xfdown: 下载完成!"])
+            except:
+                if os.name=='posix':
+                  _print("notify-send error,you should have libnotify-bin installed.")
 
-    def __Login(self,needInput=False,verify=False):
+    def __Login(self,needinput=False,verify=False):
         """
         登录
         """
-        if not needInput and not verify:
+        if not needinput and not verify:
             try:
                 f=open(self.__cookiepath)
                 line=f.readlines()[1].strip()
@@ -367,14 +398,14 @@ class XF:
                 self.hashpasswd=lists[2]
             finally:
                 f.close()
-        if not hasattr(self,"hashpasswd") or needInput:
+        if not hasattr(self,"hashpasswd") or needinput:
             self.__qq = raw_input('QQ：')
             import getpass
-            self.pswd=getpass.getpass('PASSWD: ')
+            self.pswd= getpass.getpass('PASSWD: ')
             self.pswd = self.pswd.strip()
         self.__qq = self.__qq.strip()
         self.__verifycode = self.__getverifycode()
-        if not hasattr(self,"hashpasswd") or needInput:
+        if not hasattr(self,"hashpasswd") or needinput:
             self.passwd = self.__preprocess(
                 self.pswd,
                 self.__verifycode
@@ -388,9 +419,34 @@ class XF:
         self.__request_login()
 
 
-
+def usage():
+    print("QQxf offline download utility (you need aria2 installed to use).\n")
+    print("  -h,--help\tshow this usage and exit.")
+    print("  -d <dir>,--downloaddir=<dir>\n\tset the download dir.")
+    print("  -p <player>,--player=<player>\n\tset the player.")
+    print("\n\nsee https://github.com/kikyous/xfdown for most newest version and more information")
 try:
-    s = XF()
+    xf = XF()
+    opts, args = getopt.getopt(sys.argv[1:], "hd:p:", ["help", "downloaddir=","player="])
+    for o, v in opts:
+        if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif o in ("-d", "--downloaddir"):
+            xf._downpath=os.path.abspath(os.path.expanduser(v))
+        elif o in ("-p", "--player"):
+            xf._player=v
+        else:
+            assert False, "unhandled option"
+    if not hasattr(xf,"_downpath"):
+        xf._downpath = os.path.expanduser("~/downloads")
+    os.makedirs(xf._downpath) if not os.path.exists(xf._downpath) else None
+
+    xf.start()
 except KeyboardInterrupt:
-    print (" exit now.")
-    sys.exit()
+    print ("\nexit now.")
+    sys.exit(2)
+except getopt.GetoptError as err:
+    print(err)
+    usage()
+    sys.exit(2)
